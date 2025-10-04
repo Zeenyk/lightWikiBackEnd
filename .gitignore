@@ -1,3 +1,4 @@
 lightwiki_env/
 .env
 scraper/venv
+tools/venv
