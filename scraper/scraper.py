@@ -4,24 +4,29 @@ import requests
 from bs4 import BeautifulSoup
 import os
 import argparse
+import html2text
+
+import html2text
 
 def scrape_url(url, output_dir):
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, allow_redirects=True)
         response.raise_for_status()  # Raise an exception for bad status codes
         soup = BeautifulSoup(response.content, 'html.parser')
 
         # Find the main content of the article
-        article_body = soup.find('div', id='mc') # Common ID for main content in PMC articles
+        article_body = soup.find('article') # More general selector
 
         if article_body:
-            text_content = article_body.get_text(separator='\n', strip=True)
+            # Convert HTML to Markdown
+            h = html2text.HTML2Text()
+            markdown_content = h.handle(str(article_body))
             # Create a filename from the URL
-            filename = url.split('/')[-2] + '.txt'
+            filename = url.split('/')[-2] + '.md'
             filepath = os.path.join(output_dir, filename)
             with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(text_content)
+                f.write(markdown_content)
             print(f"Scraped and saved content from {url} to {filepath}")
         else:
             print(f"Could not find main content for {url}")
