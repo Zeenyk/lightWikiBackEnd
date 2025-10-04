@@ -1,0 +1,6 @@
+[submodule "csv"]
+	path = csv
+	url = https://github.com/jgalazka/SB_publications.git
+[submodule "scraper/csv"]
+	path = scraper/csv
+	url = https://github.com/jgalazka/SB_publications.git
