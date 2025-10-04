@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Interactive Graph</title>
+<style>
+  body { 
+    margin: 0; 
+    overflow: hidden; 
+    font-family: sans-serif;
+    background: #f5f5f5;
+  }
+  svg { 
+    width: 100vw; 
+    height: 100vh; 
+    background: white;
+    cursor: grab;
+  }
+  svg.dragging {
+    cursor: grabbing;
+  }
+  .node { 
+    fill: #4A90E2; 
+    stroke: #2E5C8A; 
+    stroke-width: 2px; 
+    cursor: pointer;
+    transition: fill 0.2s;
+  }
+  .node:hover { 
+    fill: #357ABD;
+  }
+  .edge { 
+    stroke: #999; 
+    stroke-opacity: 0.6;
+  }
+  .label { 
+    font-size: 11px; 
+    fill: #333;
+    pointer-events: none;
+    user-select: none;
+  }
+  #info {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(255,255,255,0.9);
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<div id="info">
+  <strong>Controls:</strong><br>
+  • Mouse wheel: Zoom<br>
+  • Click + Drag: Pan<br>
+  • Click node: Show info
+</div>
+
+<svg id="graph"></svg>
+
+<script>
+async function loadGraph() {
+    const response = await fetch('graph.json');
+    return await response.json();
+}
+
+function drawGraph(graph) {
+    const svg = document.getElementById('graph');
+    const width = svg.clientWidth;
+    const height = svg.clientHeight;
+
+    let offsetX = 0, offsetY = 0, scale = 1;
+    
+    // Gruppo principale che contiene tutto (subisce zoom e pan)
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    svg.appendChild(g);
+
+    // Normalizza le coordinate (trova min/max per centrare)
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    
+    graph.nodes.forEach(n => {
+        minX = Math.min(minX, n.x);
+        maxX = Math.max(maxX, n.x);
+        minY = Math.min(minY, n.y);
+        maxY = Math.max(maxY, n.y);
+    });
+    
+    const rangeX = maxX - minX || 1;
+    const rangeY = maxY - minY || 1;
+    const margin = 50;
+    
+    // Funzione per normalizzare coordinate
+    const normalizeX = x => margin + ((x - minX) / rangeX) * (width - 2 * margin);
+    const normalizeY = y => margin + ((y - minY) / rangeY) * (height - 2 * margin);
+
+    // Disegna archi
+    const edges = [];
+    graph.edges.forEach(e => {
+        const source = graph.nodes[e.source];
+        const target = graph.nodes[e.target];
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        
+        const x1 = normalizeX(source.x);
+        const y1 = normalizeY(source.y);
+        const x2 = normalizeX(target.x);
+        const y2 = normalizeY(target.y);
+        
+        line.setAttribute("x1", x1);
+        line.setAttribute("y1", y1);
+        line.setAttribute("x2", x2);
+        line.setAttribute("y2", y2);
+        line.setAttribute("class", "edge");
+        line.setAttribute("stroke-width", e.weight ? Math.max(0.5, e.weight * 2) : 1);
+        
+        g.appendChild(line);
+        edges.push({line, x1, y1, x2, y2});
+    });
+
+    // Disegna nodi e label
+    const nodes = [];
+    graph.nodes.forEach(n => {
+        const cx = normalizeX(n.x);
+        const cy = normalizeY(n.y);
+        
+        // Nodo
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("cx", cx);
+        circle.setAttribute("cy", cy);
+        circle.setAttribute("r", 8);
+        circle.setAttribute("class", "node");
+        circle.setAttribute("data-id", n.id);
+        
+        circle.addEventListener("click", (e) => {
+            e.stopPropagation();
+            alert(`Node: ${n.id}\nPosition: (${n.x.toFixed(2)}, ${n.y.toFixed(2)})`);
+        });
+        
+        g.appendChild(circle);
+        
+        // Label
+        const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        label.setAttribute("x", cx + 10);
+        label.setAttribute("y", cy + 4);
+        label.setAttribute("class", "label");
+        label.textContent = n.id;
+        
+        g.appendChild(label);
+        nodes.push({circle, label, cx, cy});
+    });
+
+    // Funzione per applicare trasformazione
+    function updateTransform() {
+        g.setAttribute("transform", `translate(${offsetX},${offsetY}) scale(${scale})`);
+    }
+
+    // Zoom con mouse wheel
+    svg.addEventListener("wheel", e => {
+        e.preventDefault();
+        
+        const rect = svg.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        
+        const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+        const newScale = scale * zoomFactor;
+        
+        // Zoom verso il punto del mouse
+        offsetX = mouseX - (mouseX - offsetX) * (newScale / scale);
+        offsetY = mouseY - (mouseY - offsetY) * (newScale / scale);
+        scale = newScale;
+        
+        updateTransform();
+    });
+
+    // Pan con drag
+    let isDragging = false, startX, startY;
+    
+    svg.addEventListener("mousedown", e => {
+        isDragging = true;
+        startX = e.clientX - offsetX;
+        startY = e.clientY - offsetY;
+        svg.classList.add('dragging');
+    });
+    
+    svg.addEventListener("mousemove", e => {
+        if (isDragging) {
+            offsetX = e.clientX - startX;
+            offsetY = e.clientY - startY;
+            updateTransform();
+        }
+    });
+    
+    svg.addEventListener("mouseup", () => {
+        isDragging = false;
+        svg.classList.remove('dragging');
+    });
+    
+    svg.addEventListener("mouseleave", () => {
+        isDragging = false;
+        svg.classList.remove('dragging');
+    });
+    
+    // Reset con doppio click
+    svg.addEventListener("dblclick", () => {
+        offsetX = 0;
+        offsetY = 0;
+        scale = 1;
+        updateTransform();
+    });
+}
+
+loadGraph()
+    .then(drawGraph)
+    .catch(err => {
+        console.error('Error loading graph:', err);
+        document.body.innerHTML = `
+            <div style="padding: 20px; color: red;">
+                <h2>Error loading graph.json</h2>
+                <p>Make sure graph.json exists and has the correct format:</p>
+                <pre>{
+  "nodes": [{"id": "N0", "x": 0.5, "y": 0.5}, ...],
+  "edges": [{"source": 0, "target": 1, "weight": 1.5}, ...]
+}</pre>
+            </div>
+        `;
+    });
+</script>
+
+</body>
+</html>

@@ -20,11 +20,12 @@ def json2points(blobs_json):
     blobs = json2list(blobs_json)
     embeddings = [blob2embedding(b) for b in blobs]
 
-    pca = PCA(n_components=2)
-    points_2d = pca.fit_transform(embeddings)
-    points_2d_list = points_2d.tolist()
+    pca = PCA(n_components=3)
+    points_3d = pca.fit_transform(embeddings)
+    points_3d_list = points_3d.tolist()
 
-    return points_2d_list
+    return points_3d_list
+
 
 def json2list(json):
     blobs = [base642blob(b64) for b64 in json["embeddings"]]
@@ -131,10 +132,12 @@ def graph_nearest(blobs_json):
     G = nx.from_scipy_sparse_array(A)
 
     graph_json = {
-        "nodes": [{"id": i, "x": float(points[i][0]), "y": float(points[i][1])} for i in range(len(points))],
+        "nodes": [
+            {"id": i, "x": float(points[i][0]), "y": float(points[i][1]), "z": float(points[i][2])} 
+            for i in range(len(points))],
         "blobs": [{"id": i, "blob": blob2base64(blobs[i])} for i in range(len(blobs))],
         "edges": [{"source": int(u), "target": int(v), "weight": float(d["weight"])}
-                for u, v, d in G.edges(data=True)]
+            for u, v, d in G.edges(data=True)]
     }
 
     return graph_json
@@ -145,6 +148,6 @@ with open("embeddings_blob.json", "r", encoding="utf-8") as f:
     data = json.load(f)
 
 graph = graph_nearest(data)
-with open("graph.json", "w", encoding="utf-8") as f:
+with open("graph3d.json", "w", encoding="utf-8") as f:
     json.dump(graph, f, indent=2)
-print(f"Saved graph JSON to {"graph.json"}")
+print(f"Saved graph JSON to {"graph3d.json"}")
