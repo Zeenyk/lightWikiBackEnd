@@ -1,2 +1,3 @@
 lightwiki_env/
 .env
+scraper/venv
