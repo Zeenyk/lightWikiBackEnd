@@ -16,13 +16,15 @@ def get_blob(sentence):
 
     return blob
 
+# * function to convert blob to embedding
 def blob2embedding(embedding_blob):
     length = struct.unpack('I', embedding_blob[:4])[0]
     embedding = list(struct.unpack(f'{length}f', embedding_blob[4:]))
 
     return embedding
 
-def get_distance(blob_a, blob_b):
+# * distance between 2 blobs
+def blob_distance(blob_a, blob_b):
     embedding_a = blob2embedding(blob_a)
     embedding_b = blob2embedding(blob_b)
 
