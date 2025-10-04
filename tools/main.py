@@ -6,53 +6,49 @@ from sklearn.metrics import silhouette_score
 import warnings
 warnings.filterwarnings('ignore')
 
-def find_optimal_neighbors(points, max_neighbors=15):
+def find_optimal_neighbors_fast(points, target_zones_range=(5, 20), max_neighbors=10):
     """
-    Dynamically find the optimal number of neighbors based on silhouette score.
-    Returns the number that maximizes connectivity while maintaining good clustering.
+    Fast heuristic to find optimal number of neighbors based on target zone count.
+    Uses binary search for efficiency.
     """
-    best_score = -1
-    optimal_k = 3  # default fallback
-    scores = []
+    n_points = len(points)
+    low, high = 2, min(max_neighbors, n_points - 1)
+    best_k = 3
+    best_zone_count = 0
     
-    for k in range(2, min(max_neighbors, len(points) - 1)):
-        try:
-            # Build k-NN graph
-            A = kneighbors_graph(points, n_neighbors=k, mode='connectivity', include_self=False)
-            G = nx.from_scipy_sparse_array(A)
+    # Quick heuristic: start with sqrt(n) as initial guess
+    initial_k = max(2, int(np.sqrt(n_points)))
+    
+    # Test initial k
+    A = kneighbors_graph(points, n_neighbors=initial_k, mode='connectivity', include_self=False)
+    G = nx.from_scipy_sparse_array(A)
+    zones = list(nx.connected_components(G))
+    zone_count = len(zones)
+    
+    if target_zones_range[0] <= zone_count <= target_zones_range[1]:
+        return initial_k, zone_count
+    
+    # Binary search for optimal k
+    for _ in range(5):  # Limit iterations for efficiency
+        mid = (low + high) // 2
+        A = kneighbors_graph(points, n_neighbors=mid, mode='connectivity', include_self=False)
+        G = nx.from_scipy_sparse_array(A)
+        zones = list(nx.connected_components(G))
+        zone_count = len(zones)
+        
+        if target_zones_range[0] <= zone_count <= target_zones_range[1]:
+            return mid, zone_count
+        elif zone_count < target_zones_range[0]:
+            high = mid - 1  # Too few zones, decrease k
+        else:
+            low = mid + 1   # Too many zones, increase k
             
-            # Get connected components
-            components = list(nx.connected_components(G))
-            
-            # Only compute silhouette score if we have reasonable clustering
-            if len(components) > 1 and len(components) < len(points) // 2:
-                # Create labels for silhouette score
-                labels = np.zeros(len(points))
-                for i, comp in enumerate(components):
-                    for idx in comp:
-                        labels[idx] = i
-                
-                # Calculate silhouette score
-                score = silhouette_score(points, labels)
-                scores.append((k, score, len(components)))
-                
-                if score > best_score:
-                    best_score = score
-                    optimal_k = k
-                    
-        except Exception as e:
-            scores.append((k, -1, 0))  # Mark as failed
-            continue
+        # Track best so far
+        if abs(zone_count - np.mean(target_zones_range)) < abs(best_zone_count - np.mean(target_zones_range)):
+            best_k = mid
+            best_zone_count = zone_count
     
-    # If no good score found, use heuristic based on point density
-    if best_score < 0:
-        # Use sqrt(n) as heuristic for k
-        optimal_k = max(2, int(np.sqrt(len(points))))
-        print(f"No optimal k found via silhouette score, using heuristic: k={optimal_k}")
-    else:
-        print(f"Best silhouette score: {best_score:.3f} at k={optimal_k}")
-    
-    return optimal_k
+    return best_k, best_zone_count
 
 def generate_vibrant_colors(num_colors):
     """
@@ -89,6 +85,17 @@ def generate_vibrant_colors(num_colors):
     
     return colors
 
+def calculate_optimal_zone_range(n_points, density_factor=0.1):
+    """
+    Dynamically calculate optimal zone range based on point count and density.
+    """
+    # Base calculation on point count with logarithmic scaling
+    base_zones = max(3, int(np.log(n_points) * 2))
+    min_zones = max(2, int(base_zones * 0.6))
+    max_zones = min(n_points // 5, int(base_zones * 1.4))  # Avoid too many zones
+    
+    return (min_zones, max_zones)
+
 def main():
     # Generate random point cloud
     np.random.seed(42)  # For reproducible results
@@ -98,9 +105,14 @@ def main():
     print(f"Generated {n_points} random points")
     print("=" * 50)
     
-    # Dynamically find optimal number of neighbors
-    optimal_k = find_optimal_neighbors(points)
+    # Dynamically calculate optimal zone range based on data characteristics
+    target_zones_range = calculate_optimal_zone_range(n_points)
+    print(f"Dynamically calculated target zone range: {target_zones_range}")
+    
+    # Find optimal number of neighbors with dynamic zone range
+    optimal_k, zone_count = find_optimal_neighbors_fast(points, target_zones_range)
     print(f"Optimal number of neighbors: {optimal_k}")
+    print(f"Actual zones found: {zone_count}")
     
     # Build k-NN graph with optimal neighbors
     A = kneighbors_graph(points, n_neighbors=optimal_k, mode='connectivity', include_self=False)
