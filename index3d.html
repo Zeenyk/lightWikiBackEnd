@@ -140,9 +140,9 @@
   
   <div id="info">
     <strong>Controls</strong>
-    • Mouse/Touch: Rotate<br>
-    • Pinch/Wheel: Zoom<br>
-    • Two fingers move: Pan<br>
+    • 1 finger: Rotate<br>
+    • 2 fingers: Zoom + Pan<br>
+    • Wheel: Zoom<br>
     • Click/Tap node: Show info
   </div>
   
@@ -241,13 +241,12 @@ class Graph3D {
     this.lastMouseX = 0;
     this.lastMouseY = 0;
     
-    // 🔽 VARIABILI AGGIUNTE PER PAN A DUE DITA 🔽
+    // SISTEMA SEMPLIFICATO - ZOOM E PAN COMBINATI
     this.touchStart = null;
+    this.twoFingerStart = null;
     this.initialZoom = 0;
     this.initialTouchDistance = 0;
-    this.isPinching = false;
-    this.twoFingerStart = null; // Per tracciare il pan a due dita
-    this.panThreshold = 10; // Soglia per distinguere pan da zoom
+    this.isTwoFinger = false;
     
     this.velocityX = 0;
     this.velocityY = 0;
@@ -352,42 +351,47 @@ class Graph3D {
       this.zoom = Math.max(50, Math.min(3000, this.zoom));
     });
     
-    // 🔽 EVENTI TOUCH MIGLIORATI PER PAN A DUE DITA 🔽
+    // EVENTI TOUCH - ZOOM E PAN COMBINATI
     this.canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
       
       if (e.touches.length === 1) {
-        // Singolo tocco - rotazione
+        // Singolo tocco - ROTAZIONE
         this.touchStart = {
           x: e.touches[0].clientX,
           y: e.touches[0].clientY
         };
         this.isDragging = true;
+        this.isTwoFinger = false;
         this.inertia = false;
         this.velocityX = 0;
         this.velocityY = 0;
-        this.isPinching = false;
+        
       } else if (e.touches.length === 2) {
-        // Doppio tocco - inizializza per zoom O pan
-        this.isPinching = true;
+        // Doppio tocco - ZOOM E PAN COMBINATI
+        this.isTwoFinger = true;
         this.isDragging = false;
         
-        // Salva posizione iniziale per distinguere tra zoom e pan
-        this.twoFingerStart = {
-          x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-          y: (e.touches[0].clientY + e.touches[1].clientY) / 2
-        };
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
         
+        // Salva stato iniziale per ZOOM
         this.initialZoom = this.zoom;
-        this.initialTouchDistance = this.getTouchDistance(e.touches[0], e.touches[1]);
+        this.initialTouchDistance = this.getTouchDistance(touch1, touch2);
+        
+        // Salva stato iniziale per PAN
+        this.twoFingerStart = {
+          x: (touch1.clientX + touch2.clientX) / 2,
+          y: (touch1.clientY + touch2.clientY) / 2
+        };
       }
     });
     
     this.canvas.addEventListener('touchmove', (e) => {
       e.preventDefault();
       
-      if (e.touches.length === 1 && this.touchStart && !this.isPinching) {
-        // Rotazione con singolo dito
+      if (e.touches.length === 1 && this.isDragging) {
+        // ROTAZIONE con singolo dito
         const touch = e.touches[0];
         const deltaX = touch.clientX - this.touchStart.x;
         const deltaY = touch.clientY - this.touchStart.y;
@@ -402,39 +406,40 @@ class Graph3D {
           x: touch.clientX,
           y: touch.clientY
         };
-      } else if (e.touches.length === 2 && this.isPinching) {
+        
+      } else if (e.touches.length === 2 && this.isTwoFinger) {
+        // ZOOM E PAN COMBINATI
         const touch1 = e.touches[0];
         const touch2 = e.touches[1];
+        
+        // Calcola ZOOM in base alla variazione di distanza
         const currentDistance = this.getTouchDistance(touch1, touch2);
+        const zoomFactor = currentDistance / this.initialTouchDistance;
+        this.zoom = this.initialZoom * zoomFactor;
+        this.zoom = Math.max(50, Math.min(3000, this.zoom));
+        
+        // Calcola PAN in base al movimento del punto centrale
         const centerX = (touch1.clientX + touch2.clientX) / 2;
         const centerY = (touch1.clientY + touch2.clientY) / 2;
         
-        // Calcola la variazione di distanza per lo zoom
-        const distanceChange = Math.abs(currentDistance - this.initialTouchDistance);
-        
-        // 🔽 DETERMINA SE È ZOOM O PAN 🔽
-        if (distanceChange > this.panThreshold) {
-          // ZOOM - la distanza tra le dita è cambiata significativamente
-          const zoomFactor = currentDistance / this.initialTouchDistance;
-          this.zoom = this.initialZoom * zoomFactor;
-          this.zoom = Math.max(50, Math.min(3000, this.zoom));
-        } else {
-          // PAN - le dita si muovono insieme senza cambiare distanza
-          if (this.twoFingerStart) {
-            const deltaX = centerX - this.twoFingerStart.x;
-            const deltaY = centerY - this.twoFingerStart.y;
-            
-            // Applica il pan
-            this.panX += deltaX;
-            this.panY += deltaY;
-            
-            // Aggiorna la posizione di riferimento
-            this.twoFingerStart = {
-              x: centerX,
-              y: centerY
-            };
-          }
+        if (this.twoFingerStart) {
+          const deltaX = centerX - this.twoFingerStart.x;
+          const deltaY = centerY - this.twoFingerStart.y;
+          
+          // Applica il pan
+          this.panX += deltaX;
+          this.panY += deltaY;
+          
+          // Aggiorna la posizione di riferimento per il pan
+          this.twoFingerStart = {
+            x: centerX,
+            y: centerY
+          };
         }
+        
+        // Aggiorna la distanza di riferimento per lo zoom
+        this.initialZoom = this.zoom;
+        this.initialTouchDistance = currentDistance;
       }
     });
     
@@ -447,31 +452,37 @@ class Graph3D {
           this.inertia = true;
         }
         this.isDragging = false;
-        this.isPinching = false;
+        this.isTwoFinger = false;
         this.touchStart = null;
         this.twoFingerStart = null;
         this.initialTouchDistance = 0;
+        
       } else if (e.touches.length === 1) {
-        // Passa da zoom/pan a rotazione
-        this.isPinching = false;
+        // Passa a rotazione
+        this.isTwoFinger = false;
+        this.isDragging = true;
         this.touchStart = {
           x: e.touches[0].clientX,
           y: e.touches[0].clientY
         };
+        
       } else if (e.touches.length === 2) {
-        // Aggiorna la distanza iniziale per zoom continuo
+        // Continua con due dita - aggiorna i riferimenti
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        
         this.initialZoom = this.zoom;
-        this.initialTouchDistance = this.getTouchDistance(e.touches[0], e.touches[1]);
+        this.initialTouchDistance = this.getTouchDistance(touch1, touch2);
         this.twoFingerStart = {
-          x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-          y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+          x: (touch1.clientX + touch2.clientX) / 2,
+          y: (touch1.clientY + touch2.clientY) / 2
         };
       }
     });
     
     // Gestione tap per mobile (solo per nodi)
     this.canvas.addEventListener('touchend', (e) => {
-      if (e.touches.length === 0 && !this.isPinching) {
+      if (e.touches.length === 0 && !this.isTwoFinger) {
         const rect = this.canvas.getBoundingClientRect();
         const touch = e.changedTouches[0];
         const touchX = touch.clientX - rect.left;
@@ -610,13 +621,19 @@ class Graph3D {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, w, h);
     
+    // Proietta tutti i nodi
     this.projectedNodes = this.graph.nodes.map(node => ({
       ...node,
       projected: this.project3D(node)
     }));
     
-    this.projectedNodes.sort((a, b) => a.projected.z - b.projected.z);
+    // 🔽 CORREZIONE: ORDINA PER PROFONDITÀ (z DECRESCENTE) 🔽
+    // Invece di a.projected.z - b.projected.z (crescente)
+    // Usiamo b.projected.z - a.projected.z (decrescente)
+    // Così i nodi più vicini vengono disegnati per ultimi e appaiono sopra
+    this.projectedNodes.sort((a, b) => b.projected.z - a.projected.z);
     
+    // Disegna archi con ombre
     this.graph.edges.forEach(edge => {
       const source = this.graph.nodes[edge.source];
       const target = this.graph.nodes[edge.target];
@@ -648,6 +665,7 @@ class Graph3D {
       ctx.shadowOffsetY = 0;
     });
     
+    // Disegna nodi con ombre
     this.projectedNodes.forEach(node => {
       const p = node.projected;
       if (!p.visible) return;
@@ -655,17 +673,20 @@ class Graph3D {
       const radius = Math.max(6, 10 * p.scale);
       const opacity = Math.max(0.6, Math.min(1, (p.z + 2) / 4));
       
+      // Ombra più pronunciata
       ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
       ctx.shadowBlur = 12;
       ctx.shadowOffsetX = 3;
       ctx.shadowOffsetY = 3;
       
+      // Cerchio interno
       ctx.fillStyle = node.color;
       ctx.globalAlpha = opacity;
       ctx.beginPath();
       ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
       ctx.fill();
       
+      // Bordo
       ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
       ctx.shadowBlur = 6;
       ctx.shadowOffsetX = 2;
@@ -676,16 +697,19 @@ class Graph3D {
       
       ctx.globalAlpha = 1;
       
+      // Reset ombre per il testo
       ctx.shadowColor = 'transparent';
       ctx.shadowBlur = 0;
       ctx.shadowOffsetX = 0;
       ctx.shadowOffsetY = 0;
       
+      // Label
       ctx.fillStyle = '#333333';
       ctx.font = `${Math.max(10, radius * 1.2)}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
+      // Ombra testo
       ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
       ctx.shadowBlur = 2;
       ctx.fillText(node.id, p.x, p.y - radius - 8);
@@ -694,7 +718,7 @@ class Graph3D {
   }
   
   animate() {
-    if (!this.isDragging) {
+    if (!this.isDragging && !this.isTwoFinger) {
       const upsideDown = this.isUpsideDown();
       this.autoSpinDirection = upsideDown ? -1 : 1;
       

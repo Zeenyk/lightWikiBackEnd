@@ -27,7 +27,7 @@ def json2points(blobs_json):
     return points_2d_list
 
 def json2list(json):
-    blobs = [base642blob(b64) for b64 in json["embeddings"]]
+    blobs = [base642blob(b64) for b64 in json["blobs"]]
     return blobs
 
 def base642blob(blob_b64):
