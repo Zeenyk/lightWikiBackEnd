@@ -16,6 +16,12 @@ from sklearn.neighbors import kneighbors_graph
 load_dotenv()
 client = OpenAI(api_key = os.getenv("OPENAI_API_KEY"), base_url="https://api.deepseek.com")
 
+
+def json2list(json):
+    blobs = [base642blob(b64) for b64 in json["blobs"]]
+    return blobs
+
+
 def json2points(blobs_json):
     blobs = json2list(blobs_json)
     embeddings = [blob2embedding(b) for b in blobs]
@@ -25,11 +31,6 @@ def json2points(blobs_json):
     points_3d_list = points_3d.tolist()
 
     return points_3d_list
-
-
-def json2list(json):
-    blobs = [base642blob(b64) for b64 in json["embeddings"]]
-    return blobs
 
 def base642blob(blob_b64):
     return base64.b64decode(blob_b64)
@@ -58,14 +59,19 @@ def blob_distance(blob_a, blob_b):
 
     return euclidean(embedding_a, embedding_b) 
 
-def k_nearest(blob_a, k, blobs_json):
+def k_nearest(blob_a, k=5, blobs_json):
     blobs = json2list(blobs_json) 
 
     distances = [(blob, blob_distance(blob_a, blob)) for blob in blobs]
     distances.sort(key=lambda x: x[1])
 
-    embeddings = [(blob2embedding(blob), dist) for blob, dist in distances[:k]]
-    return embeddings
+    embeddings = [(blob, dist) for blob, dist in distances[:k]]
+    embeddings_json = [{
+        "blobs": blob,  # lista di float
+        "distance": float(dist)   # converti a float per sicurezza
+    }for blob, dist in embeddings]
+
+    return embeddings_json
 
 
 def calculate_optimal_zone_range(n_points):
@@ -142,12 +148,3 @@ def graph_nearest(blobs_json):
 
     return graph_json
 
-
-
-with open("embeddings_blob.json", "r", encoding="utf-8") as f:
-    data = json.load(f)
-
-graph = graph_nearest(data)
-with open("graph3d.json", "w", encoding="utf-8") as f:
-    json.dump(graph, f, indent=2)
-print(f"Saved graph JSON to {"graph3d.json"}")
