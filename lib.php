@@ -46,8 +46,10 @@ class EmbeddingAPI {
 
     public function create_graph(){
         $blobs = $this->get_blobs();
+        $blobs_json = json_decode($blobs, true);
+        $args_json = json_encode($blobs_json);
 
-        $graph = shell_exec("lightwiki_env/bin/python " . $this->pythonScriptPath . " graph_nearest " . escapeshellarg($blobs));
+        $graph = shell_exec("lightwiki_env/bin/python " . $this->pythonScriptPath . " graph_nearest " . escapeshellarg($args_json));
 
         if (file_put_contents($this->graphPath, $graph)) {
             return "File JSON salvato con successo!";
@@ -62,12 +64,15 @@ class EmbeddingAPI {
     }
 
     public function search($text){
-        $text_esc = escapeshellarg($text);
+        $args_json = json_encode($text);
+        $text_esc = escapeshellarg($args_json);
         $blob = shell_exec("lightwiki_env/bin/python " . $this->pythonScriptPath . " get_blob " . $text_esc);
-        $blobs_json = $this->get_blobs();
-        $blobs_json_esc = escapeshellarg($blobs_json);
-        $blob_esc = escapeshellarg(trim($blob));
-        $nearest_blobs = shell_exec("lightwiki_env/bin/python " . $this->pythonScriptPath . " k_nearest " . $blob_esc . " 5 " . $blobs_json_esc);
+        $blobs = $this->get_blobs();
+        $blobs_data = json_decode($blobs, true);
+        $k_nearest_args = [trim($blob), 5, $blobs_data];
+        $args_json = json_encode($k_nearest_args);
+        $args_esc = escapeshellarg($args_json);
+        $nearest_blobs = shell_exec("lightwiki_env/bin/python " . $this->pythonScriptPath . " k_nearest " . $args_esc);
         $nearest_blobs_data = json_decode($nearest_blobs, true);
 
         $info = array();

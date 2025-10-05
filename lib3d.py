@@ -133,39 +133,27 @@ def graph_nearest(blobs_json):
 
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) < 2:
-        print(json.dumps({"error": "Missing function name"}))
+    if len(sys.argv) < 3:
+        print(json.dumps({"error": "Missing arguments"}))
         sys.exit(1)
 
     func_name = sys.argv[1]
 
     try:
+        args = json.loads(sys.argv[2])
         if func_name == "get_blob":
-            if len(sys.argv) < 3:
-                print(json.dumps({"error": "Missing sentence"}))
-                sys.exit(1)
-            sentence = sys.argv[2]
+            sentence = args
             blob = get_blob(sentence)
             print(blob2base64(blob))
 
         elif func_name == "k_nearest":
-            if len(sys.argv) < 5:
-                print(json.dumps({"error": "Missing arguments for k_nearest"}))
-                sys.exit(1)
-            blob_b64 = sys.argv[2]
-            k = int(sys.argv[3])
-            blobs_json_str = sys.argv[4]
+            blob_b64, k, blobs_json = args
             blob_a = base642blob(blob_b64)
-            blobs_json = json.loads(blobs_json_str)
             result = k_nearest(blob_a, blobs_json, k)
             print(json.dumps(result))
 
         elif func_name == "graph_nearest":
-            if len(sys.argv) < 3:
-                print(json.dumps({"error": "Missing blobs_json"}))
-                sys.exit(1)
-            blobs_json_str = sys.argv[2]
-            blobs_json = json.loads(blobs_json_str)
+            blobs_json = args
             result = graph_nearest(blobs_json)
             print(json.dumps(result))
 
