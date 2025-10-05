@@ -4,7 +4,7 @@ class EmbeddingAPI {
     private $db;
     private $pythonScriptPath;
     private $graphPath;
-
+    
     public function __construct($dbPath, $pythonScriptPath = null, $graphPath = null) {
         $this->db = new Database($dbPath);
         $this->pythonScriptPath = $pythonScriptPath ?: __DIR__ . '/../lightWikiBackEnd/lib3d.py';
@@ -15,19 +15,22 @@ class EmbeddingAPI {
         $sql = "SELECT p.embedding 
                 FROM pages p";
 
-        $embeddings = $this->db->fetchAll($sql);
+        $blobs = $this->db->fetchAll($sql);
 
-        return array(
-            "blobs" => $embeddings
-        );
+        $result = [
+            "blobs" => $blobs
+        ]
+
+        return json_encode($result)
+        
     }
 
     private function get_page_info($blob){
         $sql = "SELECT p.id, p.title, p.created_at
                 FROM pages p
-                WHERE embedding = ?";
+                WHERE embedding = $blob";
         
-        $info = $this->db->fetchAll($sql, array($blob));
+        $info = $this->db->fetchAll($sql);
 
         return $info;
     }
@@ -81,7 +84,7 @@ switch($action) {
         echo $api->create_graph();
         break;
         
-    case 'search':
+    case 'ai_search':
         $text = $_GET['q'] ?? '';
         if($text) {
             $results = $api->search($text);
