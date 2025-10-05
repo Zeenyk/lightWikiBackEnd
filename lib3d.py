@@ -175,7 +175,7 @@ def main():
         blobs_json = json.loads(blobs_json_str)
         result = graph_nearest(blobs_json)
         with open("assets/graph3d.json", "w") as json_file:
-            print(json.dump(result, json_file))
+            json.dump(result, json_file)
     
     else:
         return "Unknown command"
