@@ -1,0 +1,16 @@
+# Web scraping dependencies
+beautifulsoup4==4.14.2  # HTML parsing
+requests==2.32.5        # HTTP requests
+html2text==2025.4.15    # HTML to Markdown conversion
+
+# Supporting dependencies for requests
+certifi==2025.8.3       # SSL certificates
+charset-normalizer==3.4.3  # Character encoding
+idna==3.10              # Internationalized domain names
+urllib3==2.5.0          # HTTP client library
+
+# BeautifulSoup dependency
+soupsieve==2.8          # CSS selector library
+
+# Type support (dependency of beautifulsoup4)
+typing_extensions==4.15.0
