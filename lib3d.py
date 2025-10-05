@@ -174,10 +174,7 @@ def main():
         blobs_json_str = sys.argv[2]
         blobs_json = json.loads(blobs_json_str)
         result = graph_nearest(blobs_json)
-        if not os.path.exists('assets'):
-        os.makedirs('assets')
-
-        # Ora scrivi il file JSON
+        
         with open("assets/graph3d.json", "w") as json_file:
             json.dump(result, json_file)
         
