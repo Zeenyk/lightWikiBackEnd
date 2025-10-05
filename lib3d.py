@@ -60,18 +60,18 @@ def blob_distance(blob_a, blob_b):
     return euclidean(embedding_a, embedding_b) 
 
 def k_nearest(blob_a, k=5, blobs_json):
-    blobs = json2list(blobs_json) 
+    blobs = json2list(blobs_json)
 
     distances = [(blob, blob_distance(blob_a, blob)) for blob in blobs]
     distances.sort(key=lambda x: x[1])
 
     embeddings = [(blob, dist) for blob, dist in distances[:k]]
     embeddings_json = [{
-        "blobs": blob,  # lista di float
+        "blobs": blob2base64(blob),  # encode to base64 string
         "distance": float(dist)   # converti a float per sicurezza
     }for blob, dist in embeddings]
 
-    return embeddings_json
+    return {"embeddings": embeddings_json}
 
 
 def calculate_optimal_zone_range(n_points):
@@ -109,24 +109,6 @@ def find_optimal_neighbors_fast(points, target_zones_range=(5, 20), max_neighbor
     return best_k, best_count
 
 
-def zone_count(k):
-    G = nx.from_scipy_sparse_array(kneighbors_graph(points, n_neighbors=k, mode='connectivity', include_self=False))
-    return len(list(nx.connected_components(G)))
-    
-    count = zone_count(initial_k)
-    if target_zones_range[0] <= count <= target_zones_range[1]:
-        return initial_k, count
-    
-    for _ in range(5):
-        mid = (low + high) // 2
-        count = zone_count(mid)
-        if target_zones_range[0] <= count <= target_zones_range[1]: return mid, count
-        if count < target_zones_range[0]: high = mid - 1
-        else: low = mid + 1
-        if abs(count - sum(target_zones_range)/2) < abs(best_count - sum(target_zones_range)/2):
-            best_k, best_count = mid, count
-    return best_k, best_count
-
 def graph_nearest(blobs_json):
     points = json2points(blobs_json)
     blobs = json2list(blobs_json)
@@ -148,3 +130,46 @@ def graph_nearest(blobs_json):
 
     return graph_json
 
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "Missing function name"}))
+        sys.exit(1)
+
+    func_name = sys.argv[1]
+
+    try:
+        if func_name == "get_blob":
+            if len(sys.argv) < 3:
+                print(json.dumps({"error": "Missing sentence"}))
+                sys.exit(1)
+            sentence = sys.argv[2]
+            blob = get_blob(sentence)
+            print(blob2base64(blob))
+
+        elif func_name == "k_nearest":
+            if len(sys.argv) < 5:
+                print(json.dumps({"error": "Missing arguments for k_nearest"}))
+                sys.exit(1)
+            blob_b64 = sys.argv[2]
+            k = int(sys.argv[3])
+            blobs_json_str = sys.argv[4]
+            blob_a = base642blob(blob_b64)
+            blobs_json = json.loads(blobs_json_str)
+            result = k_nearest(blob_a, k, blobs_json)
+            print(json.dumps(result))
+
+        elif func_name == "graph_nearest":
+            if len(sys.argv) < 3:
+                print(json.dumps({"error": "Missing blobs_json"}))
+                sys.exit(1)
+            blobs_json_str = sys.argv[2]
+            blobs_json = json.loads(blobs_json_str)
+            result = graph_nearest(blobs_json)
+            print(json.dumps(result))
+
+        else:
+            print(json.dumps({"error": f"Unknown function {func_name}"}))
+    except Exception as e:
+        print(json.dumps({"error": str(e)}))
