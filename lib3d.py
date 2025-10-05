@@ -59,7 +59,7 @@ def blob_distance(blob_a, blob_b):
 
     return euclidean(embedding_a, embedding_b) 
 
-def k_nearest(blob_a, k=5, blobs_json):
+def k_nearest(blob_a, blobs_json, k=5):
     blobs = json2list(blobs_json) 
 
     distances = [(blob, blob_distance(blob_a, blob)) for blob in blobs]
@@ -109,23 +109,7 @@ def find_optimal_neighbors_fast(points, target_zones_range=(5, 20), max_neighbor
     return best_k, best_count
 
 
-def zone_count(k):
-    G = nx.from_scipy_sparse_array(kneighbors_graph(points, n_neighbors=k, mode='connectivity', include_self=False))
-    return len(list(nx.connected_components(G)))
-    
-    count = zone_count(initial_k)
-    if target_zones_range[0] <= count <= target_zones_range[1]:
-        return initial_k, count
-    
-    for _ in range(5):
-        mid = (low + high) // 2
-        count = zone_count(mid)
-        if target_zones_range[0] <= count <= target_zones_range[1]: return mid, count
-        if count < target_zones_range[0]: high = mid - 1
-        else: low = mid + 1
-        if abs(count - sum(target_zones_range)/2) < abs(best_count - sum(target_zones_range)/2):
-            best_k, best_count = mid, count
-    return best_k, best_count
+
 
 def graph_nearest(blobs_json):
     points = json2points(blobs_json)
@@ -148,3 +132,11 @@ def graph_nearest(blobs_json):
 
     return graph_json
 
+
+with open("embeddings_blob.json", "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+graph = graph_nearest(data)
+with open("graph3d.json", "w", encoding="utf-8") as f:
+    json.dump(graph, f, indent=2)
+print("Saved 3D graph JSON to graph3d.json")
