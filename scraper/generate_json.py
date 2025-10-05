@@ -22,24 +22,13 @@ def parse_markdown_file(file_path):
     title_match = re.search(r'title:\s*"([^"]+)"', frontmatter)
     title = title_match.group(1) if title_match else "Unknown Title"
     
-    # Extract authors and tags from authors field
+    # Extract everything from authors field and put it all in tags
     authors_match = re.search(r'authors:\s*(.+)', frontmatter)
     authors_tags_text = authors_match.group(1) if authors_match else ""
     
-    # Parse authors and tags
-    authors = []
-    tags = []
-    
-    # Split by commas and process each item
-    items = [item.strip() for item in authors_tags_text.split(',')]
-    
-    for item in items:
-        # Check if it's an author (starts with one or two capital letters followed by a space and a word)
-        if re.match(r'^[A-Z]{1,2}[a-z]*\s+[A-Z][a-z]+', item):
-            authors.append(item)
-        else:
-            # It's a tag (one or more words)
-            tags.append(item)
+    # Split by commas and put everything in tags
+    tags = [item.strip() for item in authors_tags_text.split(',')] if authors_tags_text else []
+    authors = []  # Empty authors array as requested
     
     # Extract date from scraped_date
     date_match = re.search(r'scraped_date:\s*(\d{4}-\d{2}-\d{2})', frontmatter)
