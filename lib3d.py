@@ -151,5 +151,17 @@ def main():
         # Output su stdout per permettere redirect
         print(json.dumps(result, indent=2))
 
+    elif command == "k_nearest_from_stdin":
+        input_data = json.loads(sys.stdin.read())
+        blob_b64 = input_data['query_blob']
+        blobs_b64_list = input_data['blobs']
+        k = input_data.get('k', 5)
+        
+        blob = base642blob(blob_b64)
+        blobs = [base642blob(b64) for b64 in blobs_b64_list]
+        
+        result = k_nearest(blob, blobs, k)
+        print(json.dumps(result))
+
 if __name__ == "__main__":
     main()
