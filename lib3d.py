@@ -140,22 +140,28 @@ if __name__ == "__main__":
     func_name = sys.argv[1]
 
     try:
-        args = json.loads(sys.argv[2])
         if func_name == "get_blob":
+            args = json.loads(sys.argv[2])
             sentence = args
             blob = get_blob(sentence)
             print(blob2base64(blob))
 
         elif func_name == "k_nearest":
+            with open(sys.argv[2], 'r') as f:
+                args = json.load(f)
             blob_b64, k, blobs_json = args
             blob_a = base642blob(blob_b64)
             result = k_nearest(blob_a, blobs_json, k)
             print(json.dumps(result))
+            os.unlink(sys.argv[2])  # optional, cleanup
 
         elif func_name == "graph_nearest":
+            with open(sys.argv[2], 'r') as f:
+                args = json.load(f)
             blobs_json = args
             result = graph_nearest(blobs_json)
             print(json.dumps(result))
+            os.unlink(sys.argv[2])  # optional, cleanup
 
         else:
             print(json.dumps({"error": f"Unknown function {func_name}"}))
