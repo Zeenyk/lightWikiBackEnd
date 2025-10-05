@@ -6,8 +6,8 @@ class EmbeddingAPI {
 
     public function __construct($dbPath, $pythonScriptPath = null, $graphPath = null) {
         $this->db = new Database($dbPath);
-        $this->pythonScriptPath = $pythonScriptPath ?: __DIR__ . '/lib3d.py';
-        $this->graphPath = graphPath ?: __DIR__ . '/graph.json';
+        $this->pythonScriptPath = $pythonScriptPath ?: __DIR__ . '../lightWikiBackEnd/lib3d.py';
+        $this->graphPath = graphPath ?: __DIR__ . '../lightWikiBackEnd/graph.json';
     }
 
     public function get_blobs(){
