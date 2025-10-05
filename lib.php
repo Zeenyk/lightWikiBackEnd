@@ -1,9 +1,13 @@
 <?php
+header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
 require_once __DIR__ . "../core/db.php";
+require_once __DIR__ . "../core/config.php";
+
+$config = include __DIR__ . "../core/config.php";
 
 class EmbeddingAPI {
     private $db;
@@ -73,7 +77,7 @@ class EmbeddingAPI {
 }
 
 // USO DELL'API
-header('Content-Type: application/json');
+
 
 $api = new EmbeddingAPI("../storage/litewiki.db");
 
