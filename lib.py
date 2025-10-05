@@ -102,7 +102,23 @@ def find_optimal_neighbors_fast(points, target_zones_range=(5, 20), max_neighbor
     return best_k, best_count
 
 
-
+def zone_count(k):
+    G = nx.from_scipy_sparse_array(kneighbors_graph(points, n_neighbors=k, mode='connectivity', include_self=False))
+    return len(list(nx.connected_components(G)))
+    
+    count = zone_count(initial_k)
+    if target_zones_range[0] <= count <= target_zones_range[1]:
+        return initial_k, count
+    
+    for _ in range(5):
+        mid = (low + high) // 2
+        count = zone_count(mid)
+        if target_zones_range[0] <= count <= target_zones_range[1]: return mid, count
+        if count < target_zones_range[0]: high = mid - 1
+        else: low = mid + 1
+        if abs(count - sum(target_zones_range)/2) < abs(best_count - sum(target_zones_range)/2):
+            best_k, best_count = mid, count
+    return best_k, best_count
 
 def graph_nearest(blobs_json):
     points = json2points(blobs_json)
@@ -131,4 +147,4 @@ with open("embeddings_blob.json", "r", encoding="utf-8") as f:
 graph = graph_nearest(data)
 with open("graph.json", "w", encoding="utf-8") as f:
     json.dump(graph, f, indent=2)
-print(f"Saved graph JSON to graph.json")
+print(f"Saved graph JSON to {"graph.json"}")
