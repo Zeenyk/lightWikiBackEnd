@@ -73,7 +73,7 @@ class EmbeddingAPI {
 // USO DELL'API
 header('Content-Type: application/json');
 
-$api = new EmbeddingAPI("path/to/database.db");
+$api = new EmbeddingAPI("../storage/litewiki.db");
 
 $action = $_GET['action'] ?? '';
 
