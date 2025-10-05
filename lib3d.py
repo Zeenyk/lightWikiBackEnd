@@ -17,9 +17,8 @@ load_dotenv()
 client = OpenAI(api_key = os.getenv("OPENAI_API_KEY"), base_url="https://api.deepseek.com")
 
 
-def json2list(json):
-    blobs = [base642blob(b64) for b64 in json["blobs"]]
-    return blobs
+def json2list(json_dict):
+    return [base642blob(b64) for b64 in json_dict["blobs"]]
 
 
 def json2points(blobs_json):
@@ -60,18 +59,18 @@ def blob_distance(blob_a, blob_b):
     return euclidean(embedding_a, embedding_b) 
 
 def k_nearest(blob_a, blobs_json, k=5):
-    blobs = json2list(blobs_json)
+    blobs = json2list(blobs_json) 
 
     distances = [(blob, blob_distance(blob_a, blob)) for blob in blobs]
     distances.sort(key=lambda x: x[1])
 
     embeddings = [(blob, dist) for blob, dist in distances[:k]]
     embeddings_json = [{
-        "blobs": blob2base64(blob),  # encode to base64 string
+        "blobs": blob2base64(blob),  # lista di float
         "distance": float(dist)   # converti a float per sicurezza
     }for blob, dist in embeddings]
 
-    return {"embeddings": embeddings_json}
+    return embeddings_json
 
 
 def calculate_optimal_zone_range(n_points):
@@ -109,6 +108,24 @@ def find_optimal_neighbors_fast(points, target_zones_range=(5, 20), max_neighbor
     return best_k, best_count
 
 
+def zone_count(k):
+    G = nx.from_scipy_sparse_array(kneighbors_graph(points, n_neighbors=k, mode='connectivity', include_self=False))
+    return len(list(nx.connected_components(G)))
+    
+    count = zone_count(initial_k)
+    if target_zones_range[0] <= count <= target_zones_range[1]:
+        return initial_k, count
+    
+    for _ in range(5):
+        mid = (low + high) // 2
+        count = zone_count(mid)
+        if target_zones_range[0] <= count <= target_zones_range[1]: return mid, count
+        if count < target_zones_range[0]: high = mid - 1
+        else: low = mid + 1
+        if abs(count - sum(target_zones_range)/2) < abs(best_count - sum(target_zones_range)/2):
+            best_k, best_count = mid, count
+    return best_k, best_count
+
 def graph_nearest(blobs_json):
     points = json2points(blobs_json)
     blobs = json2list(blobs_json)
@@ -129,3 +146,38 @@ def graph_nearest(blobs_json):
     }
 
     return graph_json
+
+
+
+
+def main():
+    import sys
+    import json
+    
+    command = sys.argv[1]
+    
+    if command == "get_blob":
+        text = sys.argv[2]
+        result = get_blob(text)
+        print(result)
+    
+    elif command == "k_nearest":
+        blob = sys.argv[2]
+        blobs_json_str = sys.argv[3]
+        k = int(sys.argv[4])
+    
+        blobs_json = json.loads(blobs_json_str)
+        result = k_nearest(blob, blobs_json, k)
+        print(json.dumps(result))
+    
+    elif command == "graph_nearest":
+        blobs_json_str = sys.argv[2]
+        blobs_json = json.loads(blobs_json_str)
+        result = graph_nearest(blobs_json)
+        print(json.dumps(result))
+    
+    else:
+        return "Unknown command"
+
+if __name__ == "__main__":
+    main()
