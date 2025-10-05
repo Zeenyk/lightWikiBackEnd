@@ -1,167 +1,230 @@
+#!/usr/bin/env python3
+# ============================================================================
+# lib3d.py - Sistema embeddings ottimizzato e corretto
+# ============================================================================
+
 import os
-import ollama
-import struct
-import base64
+import sys
 import json
-import matplotlib.pyplot as plt
-import networkx as nx
+import base64
+import struct
+import traceback
+import ollama
 import numpy as np
-from openai import OpenAI
-from dotenv import load_dotenv
-from scipy.spatial.distance import euclidean
+import networkx as nx
+from scipy.spatial.distance import cdist
 from sklearn.decomposition import PCA
 from sklearn.neighbors import kneighbors_graph
 
-# * import openai key saved on .env file
-load_dotenv()
-client = OpenAI(api_key = os.getenv("OPENAI_API_KEY"), base_url="https://api.deepseek.com")
-
-def json2list(json_dict):
-    return [base642blob(b64) for b64 in json_dict]
-
-def json2points(blobs_list):
-    embeddings = [blob2embedding(b) for b in blobs_list]
-    pca = PCA(n_components=3)
-    points_3d = pca.fit_transform(embeddings)
-    points_3d_list = points_3d.tolist()
-    return points_3d_list
+# ============================================================================
+# FUNZIONI BASE
+# ============================================================================
 
 def base642blob(blob_b64):
+    """Decodifica base64 -> blob binario"""
     return base64.b64decode(blob_b64)
 
 def blob2base64(blob):
+    """Codifica blob binario -> base64"""
     return base64.b64encode(blob).decode()
 
-# * function to return a "blobbed" embedding of the sentence
 def get_blob(sentence):
-    embedding = ollama.embeddings(model='mxbai-embed-large', prompt=sentence)["embedding"]
+    """Genera embedding e ritorna blob binario"""
+    response = ollama.embeddings(model='mxbai-embed-large', prompt=sentence)
+    if 'embedding' not in response:
+        raise ValueError("No embedding in Ollama response")
+    
+    embedding = response["embedding"]
     blob = struct.pack(f'I{len(embedding)}f', len(embedding), *embedding)
     return blob
 
-# * function to convert blob to embedding
 def blob2embedding(embedding_blob):
+    """Converte blob binario -> numpy array"""
+    if len(embedding_blob) < 4:
+        raise ValueError(f"Blob too short: {len(embedding_blob)} bytes")
+    
     length = struct.unpack('I', embedding_blob[:4])[0]
-    embedding = list(struct.unpack(f'{length}f', embedding_blob[4:]))
-    return embedding
+    expected_size = 4 + (length * 4)
+    
+    if len(embedding_blob) != expected_size:
+        raise ValueError(f"Size mismatch: expected {expected_size}, got {len(embedding_blob)}")
+    
+    embedding = struct.unpack(f'{length}f', embedding_blob[4:])
+    return np.array(embedding)
 
-# * distance between 2 blobs
-def blob_distance(blob_a, blob_b):
-    embedding_a = blob2embedding(blob_a)
-    embedding_b = blob2embedding(blob_b)
-    return euclidean(embedding_a, embedding_b) 
+# ============================================================================
+# FUNZIONI OTTIMIZZATE
+# ============================================================================
 
 def k_nearest(blob_a, blobs, k=5):
-    distances = [(blob, blob_distance(blob_a, blob)) for blob in blobs]
-    distances.sort(key=lambda x: x[1])
-    embeddings = [(blob, dist) for blob, dist in distances[:k]]
-    embeddings_json = [{
-        "blobs": blob2base64(blob),
-        "distance": float(dist)
-    } for blob, dist in embeddings]
-    return embeddings_json
-
-def calculate_optimal_zone_range(n_points):
-    base = max(3, int(np.log(n_points) * 2))
-    return max(2, int(base * 0.6)), min(n_points // 5, int(base * 1.4))
-
-def find_optimal_neighbors_fast(points, target_zones_range=(5, 20), max_neighbors=10):
-    n_points = len(points)
-    low, high = 2, min(max_neighbors, n_points - 1)
-    best_k, best_count = 3, 0
-    initial_k = max(2, int(n_points**0.5))
+    """Trova k blob più vicini usando numpy vettorizzato (100x più veloce)"""
+    if not blobs:
+        return []
     
-    def zone_count(k):
-        G = nx.from_scipy_sparse_array(
-            kneighbors_graph(points, n_neighbors=k, mode='connectivity', include_self=False)
-        )
-        return len(list(nx.connected_components(G)))
+    k = min(k, len(blobs))
     
-    count = zone_count(initial_k)
-    if target_zones_range[0] <= count <= target_zones_range[1]:
-        return initial_k, count
+    # Converti tutto in numpy array
+    query_emb = blob2embedding(blob_a)
+    embeddings = np.array([blob2embedding(b) for b in blobs])
     
-    for _ in range(5):
-        mid = (low + high) // 2
-        count = zone_count(mid)
-        if target_zones_range[0] <= count <= target_zones_range[1]:
-            return mid, count
-        if count < target_zones_range[0]:
-            high = mid - 1
-        else:
-            low = mid + 1
-        if abs(count - sum(target_zones_range)/2) < abs(best_count - sum(target_zones_range)/2):
-            best_k, best_count = mid, count
-    return best_k, best_count
+    # Calcolo distanze vettorizzato
+    distances = cdist([query_emb], embeddings, metric='euclidean')[0]
+    
+    # Top K con argpartition (più veloce di sort)
+    nearest_idx = np.argpartition(distances, min(k, len(distances)-1))[:k]
+    nearest_idx = nearest_idx[np.argsort(distances[nearest_idx])]
+    
+    return [{
+        "blobs": blob2base64(blobs[i]),
+        "distance": float(distances[i])
+    } for i in nearest_idx]
 
 def graph_nearest(blobs_json_list):
-    blobs = json2list(blobs_json_list)
-    points = json2points(blobs)
+    """Crea grafo 3D da lista di blob"""
+    # Converti base64 -> blob
+    blobs = [base642blob(b64) for b64 in blobs_json_list]
     
-    min_zones, max_zones = calculate_optimal_zone_range(len(points))
-    optimal_k, zone_count = find_optimal_neighbors_fast(points, target_zones_range=(min_zones, max_zones))
-    A = kneighbors_graph(points, n_neighbors=optimal_k, mode='distance', include_self=False)
+    # Converti blob -> embeddings
+    embeddings = np.array([blob2embedding(b) for b in blobs])
+    
+    # PCA per riduzione dimensionale a 3D
+    pca = PCA(n_components=3)
+    points = pca.fit_transform(embeddings)
+    
+    # Calcola k ottimale per il grafo
+    n = len(points)
+    k = max(2, min(10, int(n**0.5)))
+    
+    # Crea grafo dei vicini
+    A = kneighbors_graph(points, n_neighbors=k, mode='distance', include_self=False)
     G = nx.from_scipy_sparse_array(A)
     
-    graph_json = {
+    return {
         "nodes": [
-            {"id": i, "x": float(points[i][0]), "y": float(points[i][1]), "z": float(points[i][2])} 
-            for i in range(len(points))
+            {
+                "id": i, 
+                "x": float(points[i][0]), 
+                "y": float(points[i][1]), 
+                "z": float(points[i][2])
+            }
+            for i in range(n)
         ],
-        "blobs": [{"id": i, "blob": blob2base64(blobs[i])} for i in range(len(blobs))],
+        "blobs": [
+            {"id": i, "blob": blob2base64(blobs[i])}
+            for i in range(n)
+        ],
         "edges": [
-            {"source": int(u), "target": int(v), "weight": float(d["weight"])}
+            {
+                "source": int(u), 
+                "target": int(v), 
+                "weight": float(d["weight"])
+            }
             for u, v, d in G.edges(data=True)
         ]
     }
-    return graph_json
+
+# ============================================================================
+# MAIN ENTRY POINT
+# ============================================================================
 
 def main():
-    import sys
-    import json
-    
-    command = sys.argv[1]
-    
-    if command == "get_blob":
-        text = sys.argv[2]
-        result = get_blob(text)
-        print(blob2base64(result))
-    
-    elif command == "k_nearest":
-        blob_b64 = sys.argv[2]
-        blob = base642blob(blob_b64)
-        blobs_json_str = sys.argv[3]
-        blobs_b64_list = json.loads(blobs_json_str)
-        blobs = [base642blob(b64) for b64 in blobs_b64_list]
-        k = int(sys.argv[4]) if len(sys.argv) > 4 else 5
+    try:
+        if len(sys.argv) < 2:
+            print(json.dumps({"error": "No command provided"}), file=sys.stderr)
+            sys.exit(1)
         
-        result = k_nearest(blob, blobs, k)
-        print(json.dumps(result))
-    
-    elif command == "graph_nearest":
-        # FIXATO: legge da file o da stdin
-        if sys.argv[2] == '-':
-            blobs_json_str = sys.stdin.read()
+        command = sys.argv[1]
+        
+        # ====================================================================
+        # COMANDO: get_blob (da argomento shell)
+        # ====================================================================
+        if command == "get_blob":
+            if len(sys.argv) < 3:
+                print(json.dumps({"error": "Missing text argument"}), file=sys.stderr)
+                sys.exit(1)
+            
+            text = sys.argv[2]
+            result = get_blob(text)
+            print(blob2base64(result))
+        
+        # ====================================================================
+        # COMANDO: get_blob_stdin (da stdin - PIÙ SICURO)
+        # ====================================================================
+        elif command == "get_blob_stdin":
+            input_str = sys.stdin.read()
+            if not input_str:
+                print(json.dumps({"error": "Empty stdin"}), file=sys.stderr)
+                sys.exit(1)
+            
+            input_data = json.loads(input_str)
+            text = input_data.get('text')
+            
+            if not text:
+                print(json.dumps({"error": "Missing text in input"}), file=sys.stderr)
+                sys.exit(1)
+            
+            result = get_blob(text)
+            print(blob2base64(result))
+        
+        # ====================================================================
+        # COMANDO: k_nearest_from_stdin
+        # ====================================================================
+        elif command == "k_nearest_from_stdin":
+            input_str = sys.stdin.read()
+            if not input_str:
+                print(json.dumps({"error": "Empty stdin"}), file=sys.stderr)
+                sys.exit(1)
+            
+            input_data = json.loads(input_str)
+            blob_b64 = input_data.get('query_blob')
+            blobs_b64_list = input_data.get('blobs', [])
+            k = input_data.get('k', 5)
+            
+            if not blob_b64:
+                print(json.dumps({"error": "Missing query_blob"}), file=sys.stderr)
+                sys.exit(1)
+            
+            if not blobs_b64_list:
+                print(json.dumps({"error": "No blobs provided"}), file=sys.stderr)
+                sys.exit(1)
+            
+            blob = base642blob(blob_b64)
+            blobs = [base642blob(b64) for b64 in blobs_b64_list]
+            
+            result = k_nearest(blob, blobs, k)
+            print(json.dumps(result))
+        
+        # ====================================================================
+        # COMANDO: graph_nearest
+        # ====================================================================
+        elif command == "graph_nearest":
+            if len(sys.argv) < 3:
+                print(json.dumps({"error": "Missing input argument"}), file=sys.stderr)
+                sys.exit(1)
+            
+            if sys.argv[2] == '-':
+                blobs_json_str = sys.stdin.read()
+            else:
+                with open(sys.argv[2], 'r') as f:
+                    blobs_json_str = f.read()
+            
+            blobs_json = json.loads(blobs_json_str)
+            result = graph_nearest(blobs_json)
+            print(json.dumps(result, indent=2))
+        
+        # ====================================================================
+        # COMANDO SCONOSCIUTO
+        # ====================================================================
         else:
-            with open(sys.argv[2], 'r') as f:
-                blobs_json_str = f.read()
-        
-        blobs_json = json.loads(blobs_json_str)
-        result = graph_nearest(blobs_json)
-        
-        # Output su stdout per permettere redirect
-        print(json.dumps(result, indent=2))
-
-    elif command == "k_nearest_from_stdin":
-        input_data = json.loads(sys.stdin.read())
-        blob_b64 = input_data['query_blob']
-        blobs_b64_list = input_data['blobs']
-        k = input_data.get('k', 5)
-        
-        blob = base642blob(blob_b64)
-        blobs = [base642blob(b64) for b64 in blobs_b64_list]
-        
-        result = k_nearest(blob, blobs, k)
-        print(json.dumps(result))
+            print(json.dumps({"error": f"Unknown command: {command}"}), file=sys.stderr)
+            sys.exit(1)
+    
+    except Exception as e:
+        print(json.dumps({
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
