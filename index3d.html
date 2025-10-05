@@ -10,7 +10,8 @@
   body { 
     overflow: hidden; 
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-    background: #1a1a2e;
+    background: #ffffff;
+    touch-action: none;
   }
   
   #container { 
@@ -22,7 +23,8 @@
   canvas { 
     display: block; 
     cursor: pointer;
-    background: #0a0a1a;
+    background: #ffffff;
+    touch-action: none;
   }
   
   canvas.dragging { 
@@ -37,19 +39,19 @@
     position: absolute; 
     top: 20px; 
     left: 20px; 
-    background: rgba(0, 0, 0, 0.85); 
-    color: #e0e0e0;
+    background: rgba(255, 255, 255, 0.95); 
+    color: #333333;
     padding: 16px 20px; 
     border-radius: 12px; 
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); 
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15); 
     font-size: 13px;
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(0, 0, 0, 0.1);
     line-height: 1.6;
   }
   
   #info strong { 
-    color: #5dade2; 
+    color: #2c7fb8; 
     font-size: 15px;
     display: block;
     margin-bottom: 8px;
@@ -59,21 +61,21 @@
     position: absolute;
     top: 20px;
     right: 20px;
-    background: rgba(0, 0, 0, 0.85);
-    color: #e0e0e0;
+    background: rgba(255, 255, 255, 0.95);
+    color: #333333;
     padding: 16px 20px;
     border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
     font-size: 13px;
     display: none;
     max-width: 300px;
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(0, 0, 0, 0.1);
     line-height: 1.6;
   }
   
   #nodeInfo strong {
-    color: #5dade2;
+    color: #2c7fb8;
     font-size: 15px;
     display: block;
     margin-bottom: 8px;
@@ -83,7 +85,7 @@
     max-width: 100%;
     border-radius: 8px;
     margin-top: 10px;
-    border: 2px solid rgba(93, 173, 226, 0.3);
+    border: 2px solid rgba(44, 127, 184, 0.3);
   }
   
   #loading {
@@ -91,7 +93,7 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    color: #5dade2;
+    color: #2c7fb8;
     font-size: 18px;
     font-weight: 600;
   }
@@ -100,9 +102,9 @@
     position: absolute;
     top: 10px;
     right: 10px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.1);
     border: none;
-    color: #e0e0e0;
+    color: #333333;
     width: 24px;
     height: 24px;
     border-radius: 50%;
@@ -113,8 +115,20 @@
   }
   
   .close-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.2);
     transform: scale(1.1);
+  }
+
+  @media (max-width: 768px) {
+    #info, #nodeInfo {
+      font-size: 12px;
+      padding: 12px 16px;
+      max-width: 250px;
+    }
+    
+    #info strong, #nodeInfo strong {
+      font-size: 14px;
+    }
   }
 </style>
 </head>
@@ -126,11 +140,10 @@
   
   <div id="info">
     <strong>Controls</strong>
-    • Mouse wheel: Zoom<br>
-    • Left click + Drag: Rotate<br>
-    • Middle click + Drag: Pan<br>
-    • Click node: Show info<br>
-    • Double click: Reset view
+    • Mouse/Touch: Rotate<br>
+    • Pinch/Wheel: Zoom<br>
+    • Two fingers move: Pan<br>
+    • Click/Tap node: Show info
   </div>
   
   <div id="nodeInfo">
@@ -162,7 +175,7 @@ async function loadGraph() {
         y: node.y * scale,
         z: node.z * scale,
         blob: data.blobs && data.blobs[i] ? data.blobs[i].blob : null,
-        color: null  // Verrà calcolato dopo
+        color: null
       })),
       edges: data.edges.map(edge => ({
         source: edge.source,
@@ -187,7 +200,7 @@ async function loadGraph() {
     ]);
     
     // Colora i nodi
-    const extremeColors = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#A8E6CF'];
+    const extremeColors = ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3'];
     let colorIndex = 0;
     
     graph.nodes.forEach(node => {
@@ -195,10 +208,9 @@ async function loadGraph() {
         node.color = extremeColors[colorIndex++ % 4];
         node.isExtreme = true;
       } else {
-        // Gradiente basato sulla distanza dal centro
         const dist = Math.sqrt(node.x * node.x + node.y * node.y + node.z * node.z);
         const hue = 200 + dist * 100;
-        node.color = `hsl(${hue % 360}, 70%, 60%)`;
+        node.color = `hsl(${hue % 360}, 70%, 45%)`;
         node.isExtreme = false;
       }
     });
@@ -218,67 +230,37 @@ class Graph3D {
     this.ctx = canvas.getContext('2d');
     this.graph = graph;
     
-    // Usiamo un quaternione semplice per la rotazione
     this.rotationX = 0;
     this.rotationY = 0;
     this.zoom = 350;
     this.panX = 0;
     this.panY = 0;
     
-    // Parametri di interazione
     this.isDragging = false;
     this.isPanning = false;
     this.lastMouseX = 0;
     this.lastMouseY = 0;
     
-    // Cache delle proiezioni
+    // 🔽 VARIABILI AGGIUNTE PER PAN A DUE DITA 🔽
+    this.touchStart = null;
+    this.initialZoom = 0;
+    this.initialTouchDistance = 0;
+    this.isPinching = false;
+    this.twoFingerStart = null; // Per tracciare il pan a due dita
+    this.panThreshold = 10; // Soglia per distinguere pan da zoom
+    
+    this.velocityX = 0;
+    this.velocityY = 0;
+    this.friction = 0.95;
+    this.inertia = false;
+    
+    this.autoSpinDirection = 1;
+    
     this.projectedNodes = [];
-    
-    // Stelle per lo sfondo
-    this.stars = [];
-    this.generateStars();
-    
-    // Nebulosa per lo sfondo
-    this.nebula = [];
-    this.generateNebula();
     
     this.setupCanvas();
     this.setupEvents();
     this.animate();
-  }
-  
-  generateStars() {
-    // Genera 400 stelle casuali in una sfera
-    for (let i = 0; i < 400; i++) {
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      const r = 3 + Math.random() * 2;  // Distanza dalle stelle
-      
-      this.stars.push({
-        x: r * Math.sin(phi) * Math.cos(theta),
-        y: r * Math.sin(phi) * Math.sin(theta),
-        z: r * Math.cos(phi),
-        size: Math.random() * 2 + 0.5,
-        brightness: Math.random() * 0.7 + 0.3
-      });
-    }
-  }
-  
-  generateNebula() {
-    // Genera 20 zone di nebulosa per dare profondità
-    for (let i = 0; i < 20; i++) {
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      const r = 2 + Math.random() * 3;
-      
-      this.nebula.push({
-        x: r * Math.sin(phi) * Math.cos(theta),
-        y: r * Math.sin(phi) * Math.sin(theta),
-        z: r * Math.cos(phi),
-        radius: 0.5 + Math.random() * 1,
-        opacity: 0.1 + Math.random() * 0.15
-      });
-    }
   }
   
   setupCanvas() {
@@ -292,15 +274,19 @@ class Graph3D {
   }
   
   setupEvents() {
-    // Mouse drag per rotazione o pan
+    // EVENTI MOUSE
     this.canvas.addEventListener('mousedown', (e) => {
-      if (e.button === 1) {  // Middle button (rotella)
+      if (e.button === 1) {
         e.preventDefault();
         this.isPanning = true;
         this.canvas.style.cursor = 'move';
-      } else if (e.button === 0) {  // Left button
+        this.inertia = false;
+      } else if (e.button === 0) {
         this.isDragging = true;
         this.canvas.classList.add('dragging');
+        this.inertia = false;
+        this.velocityX = 0;
+        this.velocityY = 0;
       }
       this.lastMouseX = e.clientX;
       this.lastMouseY = e.clientY;
@@ -314,13 +300,11 @@ class Graph3D {
         const deltaX = e.clientX - this.lastMouseX;
         const deltaY = e.clientY - this.lastMouseY;
         
-        // Rotazione libera - Y per orizzontale, X per verticale
-        this.rotationY += deltaX * 0.01;
-        this.rotationX += deltaY * 0.01;
+        this.velocityX = deltaX * 0.01;
+        this.velocityY = deltaY * 0.01;
         
-        // Mantieni gli angoli nel range 0-2π
-        this.rotationX = this.rotationX % (Math.PI * 2);
-        this.rotationY = this.rotationY % (Math.PI * 2);
+        this.rotationY += this.velocityX;
+        this.rotationX += this.velocityY;
         
         this.lastMouseX = e.clientX;
         this.lastMouseY = e.clientY;
@@ -334,7 +318,6 @@ class Graph3D {
         this.lastMouseX = e.clientX;
         this.lastMouseY = e.clientY;
       } else {
-        // Cambia cursore quando si passa sopra un nodo
         const rect = this.canvas.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
@@ -349,6 +332,9 @@ class Graph3D {
     });
     
     const stopDrag = () => {
+      if (this.isDragging) {
+        this.inertia = true;
+      }
       this.isDragging = false;
       this.isPanning = false;
       this.canvas.classList.remove('dragging');
@@ -358,25 +344,149 @@ class Graph3D {
     this.canvas.addEventListener('mouseup', stopDrag);
     this.canvas.addEventListener('mouseleave', stopDrag);
     
-    // Zoom con rotella
+    // ZOOM MOUSE
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       const zoomFactor = e.deltaY > 0 ? 0.92 : 1.08;
       this.zoom *= zoomFactor;
-      this.zoom = Math.max(50, Math.min(3000, this.zoom));  // Range aumentato
+      this.zoom = Math.max(50, Math.min(3000, this.zoom));
     });
     
-    // Reset con doppio click
-    this.canvas.addEventListener('dblclick', () => {
-      this.rotationX = 0;
-      this.rotationY = 0;
-      this.zoom = 350;
-      this.panX = 0;
-      this.panY = 0;
-      document.getElementById('nodeInfo').style.display = 'none';
+    // 🔽 EVENTI TOUCH MIGLIORATI PER PAN A DUE DITA 🔽
+    this.canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      
+      if (e.touches.length === 1) {
+        // Singolo tocco - rotazione
+        this.touchStart = {
+          x: e.touches[0].clientX,
+          y: e.touches[0].clientY
+        };
+        this.isDragging = true;
+        this.inertia = false;
+        this.velocityX = 0;
+        this.velocityY = 0;
+        this.isPinching = false;
+      } else if (e.touches.length === 2) {
+        // Doppio tocco - inizializza per zoom O pan
+        this.isPinching = true;
+        this.isDragging = false;
+        
+        // Salva posizione iniziale per distinguere tra zoom e pan
+        this.twoFingerStart = {
+          x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+          y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+        };
+        
+        this.initialZoom = this.zoom;
+        this.initialTouchDistance = this.getTouchDistance(e.touches[0], e.touches[1]);
+      }
     });
     
-    // Click su nodi
+    this.canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      
+      if (e.touches.length === 1 && this.touchStart && !this.isPinching) {
+        // Rotazione con singolo dito
+        const touch = e.touches[0];
+        const deltaX = touch.clientX - this.touchStart.x;
+        const deltaY = touch.clientY - this.touchStart.y;
+        
+        this.velocityX = deltaX * 0.005;
+        this.velocityY = deltaY * 0.005;
+        
+        this.rotationY += this.velocityX;
+        this.rotationX += this.velocityY;
+        
+        this.touchStart = {
+          x: touch.clientX,
+          y: touch.clientY
+        };
+      } else if (e.touches.length === 2 && this.isPinching) {
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        const currentDistance = this.getTouchDistance(touch1, touch2);
+        const centerX = (touch1.clientX + touch2.clientX) / 2;
+        const centerY = (touch1.clientY + touch2.clientY) / 2;
+        
+        // Calcola la variazione di distanza per lo zoom
+        const distanceChange = Math.abs(currentDistance - this.initialTouchDistance);
+        
+        // 🔽 DETERMINA SE È ZOOM O PAN 🔽
+        if (distanceChange > this.panThreshold) {
+          // ZOOM - la distanza tra le dita è cambiata significativamente
+          const zoomFactor = currentDistance / this.initialTouchDistance;
+          this.zoom = this.initialZoom * zoomFactor;
+          this.zoom = Math.max(50, Math.min(3000, this.zoom));
+        } else {
+          // PAN - le dita si muovono insieme senza cambiare distanza
+          if (this.twoFingerStart) {
+            const deltaX = centerX - this.twoFingerStart.x;
+            const deltaY = centerY - this.twoFingerStart.y;
+            
+            // Applica il pan
+            this.panX += deltaX;
+            this.panY += deltaY;
+            
+            // Aggiorna la posizione di riferimento
+            this.twoFingerStart = {
+              x: centerX,
+              y: centerY
+            };
+          }
+        }
+      }
+    });
+    
+    this.canvas.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      
+      if (e.touches.length === 0) {
+        // Tutte le dita sollevate
+        if (this.isDragging) {
+          this.inertia = true;
+        }
+        this.isDragging = false;
+        this.isPinching = false;
+        this.touchStart = null;
+        this.twoFingerStart = null;
+        this.initialTouchDistance = 0;
+      } else if (e.touches.length === 1) {
+        // Passa da zoom/pan a rotazione
+        this.isPinching = false;
+        this.touchStart = {
+          x: e.touches[0].clientX,
+          y: e.touches[0].clientY
+        };
+      } else if (e.touches.length === 2) {
+        // Aggiorna la distanza iniziale per zoom continuo
+        this.initialZoom = this.zoom;
+        this.initialTouchDistance = this.getTouchDistance(e.touches[0], e.touches[1]);
+        this.twoFingerStart = {
+          x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+          y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+        };
+      }
+    });
+    
+    // Gestione tap per mobile (solo per nodi)
+    this.canvas.addEventListener('touchend', (e) => {
+      if (e.touches.length === 0 && !this.isPinching) {
+        const rect = this.canvas.getBoundingClientRect();
+        const touch = e.changedTouches[0];
+        const touchX = touch.clientX - rect.left;
+        const touchY = touch.clientY - rect.top;
+        
+        const tappedNode = this.findNodeAtPosition(touchX, touchY);
+        if (tappedNode) {
+          this.showNodeInfo(tappedNode);
+        } else {
+          document.getElementById('nodeInfo').style.display = 'none';
+        }
+      }
+    });
+    
+    // Click su nodi (desktop)
     let clickStartTime = 0;
     let clickStartX = 0;
     let clickStartY = 0;
@@ -394,7 +504,6 @@ class Graph3D {
         Math.pow(e.clientY - clickStartY, 2)
       );
       
-      // Solo se è un click vero (non un drag)
       if (clickDuration < 300 && clickDistance < 5) {
         const rect = this.canvas.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
@@ -410,16 +519,23 @@ class Graph3D {
     });
   }
   
+  getTouchDistance(touch1, touch2) {
+    const dx = touch1.clientX - touch2.clientX;
+    const dy = touch1.clientY - touch2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+  
+  isUpsideDown() {
+    const normalZ = Math.cos(this.rotationX) * Math.cos(this.rotationY);
+    return normalZ < -0.3;
+  }
+  
   rotate3D(x, y, z) {
-    // Rotazione semplice ma efficace - prima Y (orizzontale) poi X (verticale)
-    
-    // Rotazione Y (orizzontale)
     const cosY = Math.cos(this.rotationY);
     const sinY = Math.sin(this.rotationY);
     const x1 = x * cosY - z * sinY;
     const z1 = x * sinY + z * cosY;
     
-    // Rotazione X (verticale)
     const cosX = Math.cos(this.rotationX);
     const sinX = Math.sin(this.rotationX);
     const y2 = y * cosX - z1 * sinX;
@@ -429,10 +545,8 @@ class Graph3D {
   }
   
   project3D(node) {
-    // Applica rotazioni
     const rotated = this.rotate3D(node.x, node.y, node.z);
     
-    // Proiezione prospettica
     const perspective = 2;
     const scale = this.zoom / (perspective + rotated.z);
     const screenX = this.canvas.width / 2 + rotated.x * scale + this.panX;
@@ -448,7 +562,6 @@ class Graph3D {
   }
   
   findNodeAtPosition(mouseX, mouseY) {
-    // Correggi le coordinate del mouse per il pan
     const correctedX = mouseX - this.panX;
     const correctedY = mouseY - this.panY;
     
@@ -476,13 +589,11 @@ class Graph3D {
     let html = `<strong>Node ${node.id}</strong>`;
     html += `Position: (${node.x.toFixed(3)}, ${node.y.toFixed(3)}, ${node.z.toFixed(3)})<br>`;
     
-    // Conta le connessioni
     const connections = this.graph.edges.filter(e => 
       e.source === node.id || e.target === node.id
     ).length;
     html += `Connections: ${connections}<br>`;
     
-    // Mostra il blob se disponibile
     if (node.blob) {
       html += `<img src="data:image/png;base64,${node.blob}" alt="Node ${node.id}" />`;
     }
@@ -491,92 +602,21 @@ class Graph3D {
     infoDiv.style.display = 'block';
   }
   
-  drawBackground() {
-    const ctx = this.ctx;
-    const w = this.canvas.width;
-    const h = this.canvas.height;
-    
-    // Sfondo con gradiente
-    const gradient = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, Math.max(w, h)/2);
-    gradient.addColorStop(0, '#0a0a1a');
-    gradient.addColorStop(1, '#1a1a2e');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, w, h);
-    
-    // Disegna nebulosa
-    this.nebula.forEach(neb => {
-      const rotated = this.rotate3D(neb.x, neb.y, neb.z);
-      const perspective = 2;
-      const scale = this.zoom / (perspective + rotated.z);
-      const screenX = w/2 + rotated.x * scale + this.panX;
-      const screenY = h/2 + rotated.y * scale + this.panY;
-      
-      if (rotated.z > -perspective) {
-        const radius = neb.radius * scale;
-        const opacity = Math.max(0, Math.min(neb.opacity, (rotated.z + 2) / 4));
-        
-        // Gradiente per la nebulosa
-        const nebulaGradient = ctx.createRadialGradient(
-          screenX, screenY, 0, 
-          screenX, screenY, radius
-        );
-        nebulaGradient.addColorStop(0, `rgba(80, 100, 150, ${opacity})`);
-        nebulaGradient.addColorStop(1, 'rgba(80, 100, 150, 0)');
-        
-        ctx.fillStyle = nebulaGradient;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, radius, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    });
-    
-    // Disegna stelle
-    this.stars.forEach(star => {
-      const rotated = this.rotate3D(star.x, star.y, star.z);
-      const perspective = 2;
-      const scale = this.zoom / (perspective + rotated.z);
-      const screenX = w/2 + rotated.x * scale + this.panX;
-      const screenY = h/2 + rotated.y * scale + this.panY;
-      
-      if (rotated.z > -perspective) {
-        const size = star.size * scale;
-        const opacity = Math.max(0, Math.min(star.brightness, (rotated.z + 2) / 4));
-        
-        // Stelle più luminose quando sono più vicine
-        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, size, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Effetto bagliore per stelle più grandi
-        if (size > 1.5) {
-          ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
-          ctx.shadowBlur = size * 2;
-          ctx.fill();
-          ctx.shadowBlur = 0;
-        }
-      }
-    });
-  }
-  
   draw() {
     const ctx = this.ctx;
     const w = this.canvas.width;
     const h = this.canvas.height;
     
-    // Disegna lo sfondo con stelle e nebulosa
-    this.drawBackground();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
     
-    // Proietta tutti i nodi
     this.projectedNodes = this.graph.nodes.map(node => ({
       ...node,
       projected: this.project3D(node)
     }));
     
-    // Ordina per profondità (z crescente = più vicini)
     this.projectedNodes.sort((a, b) => a.projected.z - b.projected.z);
     
-    // Disegna archi
     this.graph.edges.forEach(edge => {
       const source = this.graph.nodes[edge.source];
       const target = this.graph.nodes[edge.target];
@@ -586,65 +626,93 @@ class Graph3D {
       
       if (!sourceProj.visible || !targetProj.visible) return;
       
-      // Gradiente di profondità
       const avgZ = (sourceProj.z + targetProj.z) / 2;
-      const opacity = Math.max(0.15, Math.min(0.6, (avgZ + 2) / 4));
+      const opacity = Math.max(0.2, Math.min(0.8, (avgZ + 2) / 4));
       
-      ctx.strokeStyle = `rgba(93, 173, 226, ${opacity})`;
+      ctx.strokeStyle = `rgba(44, 127, 184, ${opacity})`;
       ctx.lineWidth = Math.max(0.5, edge.weight * 2 * Math.max(sourceProj.scale, targetProj.scale));
+      
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 1;
+      
       ctx.beginPath();
       ctx.moveTo(sourceProj.x, sourceProj.y);
       ctx.lineTo(targetProj.x, targetProj.y);
       ctx.stroke();
+      
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
     });
     
-    // Disegna nodi
     this.projectedNodes.forEach(node => {
       const p = node.projected;
       if (!p.visible) return;
       
       const radius = Math.max(6, 10 * p.scale);
-      const opacity = Math.max(0.5, Math.min(1, (p.z + 2) / 4));
+      const opacity = Math.max(0.6, Math.min(1, (p.z + 2) / 4));
       
-      // Ombra
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-      ctx.shadowBlur = 8;
-      ctx.shadowOffsetX = 2;
-      ctx.shadowOffsetY = 2;
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+      ctx.shadowBlur = 12;
+      ctx.shadowOffsetX = 3;
+      ctx.shadowOffsetY = 3;
       
-      // Cerchio interno
       ctx.fillStyle = node.color;
       ctx.globalAlpha = opacity;
       ctx.beginPath();
       ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
       ctx.fill();
       
-      // Bordo
-      ctx.shadowColor = 'transparent';
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetX = 2;
+      ctx.shadowOffsetY = 2;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
       ctx.lineWidth = 2;
       ctx.stroke();
       
       ctx.globalAlpha = 1;
       
-      // Label - sempre visibili
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+      
+      ctx.fillStyle = '#333333';
       ctx.font = `${Math.max(10, radius * 1.2)}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
-      // Ombra testo
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-      ctx.shadowBlur = 4;
+      ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+      ctx.shadowBlur = 2;
       ctx.fillText(node.id, p.x, p.y - radius - 8);
       ctx.shadowColor = 'transparent';
     });
   }
   
   animate() {
-    // Rotazione automatica leggera quando non si sta trascinando
     if (!this.isDragging) {
-      this.rotationY += 0.001;
+      const upsideDown = this.isUpsideDown();
+      this.autoSpinDirection = upsideDown ? -1 : 1;
+      
+      this.rotationY += 0.0005 * this.autoSpinDirection;
+    }
+    
+    if (this.inertia && (Math.abs(this.velocityX) > 0.001 || Math.abs(this.velocityY) > 0.001)) {
+      this.rotationY += this.velocityX;
+      this.rotationX += this.velocityY;
+      
+      this.velocityX *= this.friction;
+      this.velocityY *= this.friction;
+      
+      if (Math.abs(this.velocityX) < 0.001 && Math.abs(this.velocityY) < 0.001) {
+        this.velocityX = 0;
+        this.velocityY = 0;
+        this.inertia = false;
+      }
     }
     
     this.draw();
