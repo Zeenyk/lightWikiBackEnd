@@ -16,19 +16,14 @@ from sklearn.neighbors import kneighbors_graph
 load_dotenv()
 client = OpenAI(api_key = os.getenv("OPENAI_API_KEY"), base_url="https://api.deepseek.com")
 
-
 def json2list(json_dict):
-    return [base642blob(b64) for b64 in json_dict["blobs"]]
+    return [base642blob(b64) for b64 in json_dict]
 
-
-def json2points(blobs_json):
-    blobs = json2list(blobs_json)
-    embeddings = [blob2embedding(b) for b in blobs]
-
+def json2points(blobs_list):
+    embeddings = [blob2embedding(b) for b in blobs_list]
     pca = PCA(n_components=3)
     points_3d = pca.fit_transform(embeddings)
     points_3d_list = points_3d.tolist()
-
     return points_3d_list
 
 def base642blob(blob_b64):
@@ -41,36 +36,29 @@ def blob2base64(blob):
 def get_blob(sentence):
     embedding = ollama.embeddings(model='mxbai-embed-large', prompt=sentence)["embedding"]
     blob = struct.pack(f'I{len(embedding)}f', len(embedding), *embedding)
-
     return blob
 
 # * function to convert blob to embedding
 def blob2embedding(embedding_blob):
     length = struct.unpack('I', embedding_blob[:4])[0]
     embedding = list(struct.unpack(f'{length}f', embedding_blob[4:]))
-
     return embedding
 
 # * distance between 2 blobs
 def blob_distance(blob_a, blob_b):
     embedding_a = blob2embedding(blob_a)
     embedding_b = blob2embedding(blob_b)
-
     return euclidean(embedding_a, embedding_b) 
 
 def k_nearest(blob_a, blobs, k=5):
-
     distances = [(blob, blob_distance(blob_a, blob)) for blob in blobs]
     distances.sort(key=lambda x: x[1])
-
     embeddings = [(blob, dist) for blob, dist in distances[:k]]
     embeddings_json = [{
-        "blobs": blob2base64(blob),  # lista di float
-        "distance": float(dist)   # converti a float per sicurezza
-    }for blob, dist in embeddings]
-
+        "blobs": blob2base64(blob),
+        "distance": float(dist)
+    } for blob, dist in embeddings]
     return embeddings_json
-
 
 def calculate_optimal_zone_range(n_points):
     base = max(3, int(np.log(n_points) * 2))
@@ -81,17 +69,17 @@ def find_optimal_neighbors_fast(points, target_zones_range=(5, 20), max_neighbor
     low, high = 2, min(max_neighbors, n_points - 1)
     best_k, best_count = 3, 0
     initial_k = max(2, int(n_points**0.5))
-
+    
     def zone_count(k):
         G = nx.from_scipy_sparse_array(
             kneighbors_graph(points, n_neighbors=k, mode='connectivity', include_self=False)
         )
         return len(list(nx.connected_components(G)))
-
+    
     count = zone_count(initial_k)
     if target_zones_range[0] <= count <= target_zones_range[1]:
         return initial_k, count
-
+    
     for _ in range(5):
         mid = (low + high) // 2
         count = zone_count(mid)
@@ -103,51 +91,29 @@ def find_optimal_neighbors_fast(points, target_zones_range=(5, 20), max_neighbor
             low = mid + 1
         if abs(count - sum(target_zones_range)/2) < abs(best_count - sum(target_zones_range)/2):
             best_k, best_count = mid, count
-
     return best_k, best_count
 
-
-def zone_count(k):
-    G = nx.from_scipy_sparse_array(kneighbors_graph(points, n_neighbors=k, mode='connectivity', include_self=False))
-    return len(list(nx.connected_components(G)))
+def graph_nearest(blobs_json_list):
+    blobs = json2list(blobs_json_list)
+    points = json2points(blobs)
     
-    count = zone_count(initial_k)
-    if target_zones_range[0] <= count <= target_zones_range[1]:
-        return initial_k, count
-    
-    for _ in range(5):
-        mid = (low + high) // 2
-        count = zone_count(mid)
-        if target_zones_range[0] <= count <= target_zones_range[1]: return mid, count
-        if count < target_zones_range[0]: high = mid - 1
-        else: low = mid + 1
-        if abs(count - sum(target_zones_range)/2) < abs(best_count - sum(target_zones_range)/2):
-            best_k, best_count = mid, count
-    return best_k, best_count
-
-def graph_nearest(blobs_json):
-    points = json2points(blobs_json)
-    blobs = json2list(blobs_json)
-
     min_zones, max_zones = calculate_optimal_zone_range(len(points))
     optimal_k, zone_count = find_optimal_neighbors_fast(points, target_zones_range=(min_zones, max_zones))
-
     A = kneighbors_graph(points, n_neighbors=optimal_k, mode='distance', include_self=False)
     G = nx.from_scipy_sparse_array(A)
-
+    
     graph_json = {
         "nodes": [
             {"id": i, "x": float(points[i][0]), "y": float(points[i][1]), "z": float(points[i][2])} 
-            for i in range(len(points))],
+            for i in range(len(points))
+        ],
         "blobs": [{"id": i, "blob": blob2base64(blobs[i])} for i in range(len(blobs))],
-        "edges": [{"source": int(u), "target": int(v), "weight": float(d["weight"])}
-            for u, v, d in G.edges(data=True)]
+        "edges": [
+            {"source": int(u), "target": int(v), "weight": float(d["weight"])}
+            for u, v, d in G.edges(data=True)
+        ]
     }
-
     return graph_json
-
-
-
 
 def main():
     import sys
@@ -158,28 +124,32 @@ def main():
     if command == "get_blob":
         text = sys.argv[2]
         result = get_blob(text)
-        print(result)
+        print(blob2base64(result))
     
     elif command == "k_nearest":
-        blob = sys.argv[2]
-        blobs_json_str = sys.argv[3]  
+        blob_b64 = sys.argv[2]
+        blob = base642blob(blob_b64)
+        blobs_json_str = sys.argv[3]
         blobs_b64_list = json.loads(blobs_json_str)
         blobs = [base642blob(b64) for b64 in blobs_b64_list]
-        k = int(sys.argv[4])
+        k = int(sys.argv[4]) if len(sys.argv) > 4 else 5
         
         result = k_nearest(blob, blobs, k)
         print(json.dumps(result))
     
     elif command == "graph_nearest":
-        blobs_json_str = sys.argv[2]
+        # FIXATO: legge da file o da stdin
+        if sys.argv[2] == '-':
+            blobs_json_str = sys.stdin.read()
+        else:
+            with open(sys.argv[2], 'r') as f:
+                blobs_json_str = f.read()
+        
         blobs_json = json.loads(blobs_json_str)
         result = graph_nearest(blobs_json)
         
-        with open("../public/assets/graph3d.json", "w") as json_file:
-            json.dump(result, json_file)
-        
-        else:
-            return "Unknown command"
+        # Output su stdout per permettere redirect
+        print(json.dumps(result, indent=2))
 
 if __name__ == "__main__":
     main()
