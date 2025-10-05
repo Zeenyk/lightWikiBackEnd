@@ -22,19 +22,18 @@ class EmbeddingAPI {
 
         $result = [
             "blobs" => $blobs
-        ]
+        ];
 
-        return json_encode($result)
+        return json_encode($result);
         
     }
 
     private function get_page_info($blob){
         $sql = "SELECT p.id, p.title, p.created_at
                 FROM pages p
-                WHERE embedding = $blob";
+                WHERE embedding = ?";
         
-        $info = $this->db->fetchAll($sql);
-
+        $info = $this->db->fetchAll($sql, [$blob]);
         return $info;
     }
 
