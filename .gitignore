@@ -1,5 +1,5 @@
 lightwiki_env/
-.env
+
 scraper/venv
 
 scraper/scraped_content
