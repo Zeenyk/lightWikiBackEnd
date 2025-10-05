@@ -58,8 +58,7 @@ def blob_distance(blob_a, blob_b):
 
     return euclidean(embedding_a, embedding_b) 
 
-def k_nearest(blob_a, blobs_json, k=5):
-    blobs = json2list(blobs_json) 
+def k_nearest(blob_a, blobs, k=5):
 
     distances = [(blob, blob_distance(blob_a, blob)) for blob in blobs]
     distances.sort(key=lambda x: x[1])
@@ -163,11 +162,12 @@ def main():
     
     elif command == "k_nearest":
         blob = sys.argv[2]
-        blobs_json_str = sys.argv[3]
+        blobs_json_str = sys.argv[3]  
+        blobs_b64_list = json.loads(blobs_json_str)
+        blobs = [base642blob(b64) for b64 in blobs_b64_list]
         k = int(sys.argv[4])
-    
-        blobs_json = json.loads(blobs_json_str)
-        result = k_nearest(blob, blobs_json, k)
+        
+        result = k_nearest(blob, blobs, k)
         print(json.dumps(result))
     
     elif command == "graph_nearest":
